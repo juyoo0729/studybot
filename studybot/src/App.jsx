@@ -52,7 +52,7 @@ const SCI_S =[{k:'elementary',l:'초등',c:'#34d399'},{k:'middle',l:'중등',c:'
 
 async function askGemini(apiKey, prompt) {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
     {
       method:'POST',
       headers:{'Content-Type':'application/json'},
