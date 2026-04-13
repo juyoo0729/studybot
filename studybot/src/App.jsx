@@ -50,7 +50,7 @@ const MATH_S=[{k:'elementary',l:'초등',c:'#34d399'},{k:'middle',l:'중등',c:'
 const ENG_S =[{k:'elementary',l:'초등',c:'#34d399'},{k:'middle',l:'중등',c:'#f59e0b'},{k:'high',l:'고등',c:'#f472b6'}];
 const SCI_S =[{k:'elementary',l:'초등',c:'#34d399'},{k:'middle',l:'중등',c:'#f59e0b'},{k:'physics',l:'물리',c:'#38bdf8'},{k:'chemistry',l:'화학',c:'#a78bfa'},{k:'biology',l:'생명과학',c:'#fb923c'},{k:'earth',l:'지구과학',c:'#f472b6'}];
 
-async function askGemini(apiKey, prompt) {
+async function ask(apiKey, prompt) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
@@ -131,7 +131,7 @@ function ApiKeyScreen({onSave}){
       <div style={{width:'100%',maxWidth:440,background:'#161b22',border:'1px solid #21262d',borderRadius:16,padding:32}}>
         <div style={{textAlign:'center',marginBottom:28}}>
           <div style={{fontSize:36,marginBottom:12}}>🔑</div>
-          <h2 style={{fontSize:20,fontWeight:700,color:'#e2e8f0',margin:'0 0 8px'}}>Gemini API 키 입력</h2>
+          <h2 style={{fontSize:20,fontWeight:700,color:'#e2e8f0',margin:'0 0 8px'}}> API 키 입력</h2>
           <p style={{fontSize:13,color:'#8b949e',lineHeight:1.6,margin:0}}>무료 API 키를 입력하면<br/>누구나 StudyBot을 사용할 수 있어요!</p>
         </div>
         <div style={{background:'#0d1117',border:'1px solid #21262d',borderRadius:10,padding:16,marginBottom:20,fontSize:12,color:'#8b949e',lineHeight:1.9}}>
@@ -157,7 +157,7 @@ function ApiKeyScreen({onSave}){
 }
 
 export default function App(){
-  const[apiKey,setApiKey]=useState(()=>localStorage.getItem('gemini_key')||'');
+  const[apiKey,setApiKey]=useState(()=>localStorage.getItem('_key')||'');
   const[page,setPage]=useState('home');
   const[subj,setSubj]=useState('python');
   const[level,setLevel]=useState('beginner');
@@ -169,7 +169,7 @@ export default function App(){
   const[error,setError]=useState('');
   const answerRef=useRef(null);
 
-  function saveKey(k){localStorage.setItem('gemini_key',k);setApiKey(k);}
+  function saveKey(k){localStorage.setItem('_key',k);setApiKey(k);}
   useEffect(()=>{if(answerRef.current)answerRef.current.scrollTop=0;},[answer]);
 
   if(!apiKey)return <ApiKeyScreen onSave={saveKey}/>;
@@ -186,10 +186,10 @@ export default function App(){
                  :subj==='science'?'과학 '+{elementary:'초등',middle:'중등',physics:'물리',chemistry:'화학',biology:'생명과학',earth:'지구과학'}[sub.science]+' '
                  :s.name+' ';
     const prompt=lvlText+' '+subText+title+LVL[level].suffix;
-    try{const text=await askGemini(apiKey,prompt);setAnswer(text);}
+    try{const text=await ask(apiKey,prompt);setAnswer(text);}
     catch(e){
       setError('❌ '+e.message);
-      if(e.message.includes('API_KEY_INVALID')||e.message.includes('401')){localStorage.removeItem('gemini_key');setApiKey('');}
+      if(e.message.includes('API_KEY_INVALID')||e.message.includes('401')){localStorage.removeItem('_key');setApiKey('');}
     }
     finally{setLoading(false);}
   }
@@ -205,10 +205,10 @@ export default function App(){
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           <span style={{fontSize:20}}>📚</span>
           <span style={{fontWeight:700,fontSize:16,color:'#58a6ff'}}>StudyBot</span>
-          <span style={{fontSize:11,background:'#1a2e1a',color:'#22c55e',padding:'2px 8px',borderRadius:99,border:'1px solid #22c55e44',marginLeft:4}}>Gemini AI</span>
+          <span style={{fontSize:11,background:'#1a2e1a',color:'#22c55e',padding:'2px 8px',borderRadius:99,border:'1px solid #22c55e44',marginLeft:4}}> AI</span>
         </div>
         <div style={{display:'flex',gap:8}}>
-          <button onClick={()=>{localStorage.removeItem('gemini_key');setApiKey('');}} style={{padding:'5px 12px',borderRadius:8,border:'1px solid #30363d',background:'transparent',color:'#8b949e',fontSize:12,cursor:'pointer'}}>🔑 키 변경</button>
+          <button onClick={()=>{localStorage.removeItem('_key');setApiKey('');}} style={{padding:'5px 12px',borderRadius:8,border:'1px solid #30363d',background:'transparent',color:'#8b949e',fontSize:12,cursor:'pointer'}}>🔑 키 변경</button>
           <button onClick={()=>setPage('app')} style={{padding:'7px 18px',borderRadius:8,border:'none',background:'#58a6ff',color:'#000',fontSize:13,fontWeight:700,cursor:'pointer'}}>앱 시작하기 →</button>
         </div>
       </nav>
@@ -216,7 +216,7 @@ export default function App(){
         <div style={{position:'absolute',inset:0,backgroundImage:'radial-gradient(circle at 50% 0%, #1f335422 0%, transparent 70%)',pointerEvents:'none'}}/>
         <div style={{position:'relative'}}>
           <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'#161b22',border:'1px solid #21262d',borderRadius:99,padding:'5px 14px',fontSize:12,color:'#8b949e',marginBottom:24}}>
-            <span style={{width:6,height:6,borderRadius:'50%',background:'#22c55e',display:'inline-block'}}/>Google Gemini AI · 완전 무료
+            <span style={{width:6,height:6,borderRadius:'50%',background:'#22c55e',display:'inline-block'}}/>Google  AI · 완전 무료
           </div>
           <h1 style={{fontSize:'clamp(28px,5vw,52px)',fontWeight:900,margin:'0 0 16px',lineHeight:1.15,letterSpacing:'-0.03em'}}>
             공부가 막힐 때<br/>
@@ -227,7 +227,7 @@ export default function App(){
         </div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderTop:'1px solid #21262d',borderBottom:'1px solid #21262d',margin:'0 0 56px'}}>
-        {[{num:'12',label:'과목'},{num:'200+',label:'학습 주제'},{num:'3',label:'난이도 단계'},{num:'무료',label:'Gemini AI'}].map(({num,label})=>(
+        {[{num:'12',label:'과목'},{num:'200+',label:'학습 주제'},{num:'3',label:'난이도 단계'},{num:'무료',label:' AI'}].map(({num,label})=>(
           <div key={label} style={{padding:'28px 16px',textAlign:'center',borderRight:'1px solid #21262d'}}>
             <div style={{fontSize:24,fontWeight:900,color:'#58a6ff'}}>{num}</div>
             <div style={{fontSize:12,color:'#8b949e',marginTop:4}}>{label}</div>
@@ -237,7 +237,7 @@ export default function App(){
       <div style={{padding:'0 24px 56px',maxWidth:840,margin:'0 auto'}}>
         <h2 style={{textAlign:'center',fontSize:20,fontWeight:700,marginBottom:32}}>주요 기능</h2>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16}}>
-          {[{icon:'🤖',title:'Gemini AI 탑재',desc:'Google Gemini 2.0 Flash — 완전 무료!'},{icon:'📚',title:'12개 과목',desc:'기초부터 AI/ML까지 체계적 커리큘럼'},{icon:'🎯',title:'3단계 난이도',desc:'초급 설명 → 중급 문제풀이 → 상급 심화'},{icon:'⚡',title:'즉시 답변',desc:'클릭 한 번으로 AI 답변 바로 출력'}].map(({icon,title,desc})=>(
+          {[{icon:'🤖',title:' AI 탑재',desc:'Google Gemini 2.5 Flash — 완전 무료!'},{icon:'📚',title:'12개 과목',desc:'기초부터 AI/ML까지 체계적 커리큘럼'},{icon:'🎯',title:'3단계 난이도',desc:'초급 설명 → 중급 문제풀이 → 상급 심화'},{icon:'⚡',title:'즉시 답변',desc:'클릭 한 번으로 AI 답변 바로 출력'}].map(({icon,title,desc})=>(
             <div key={title} style={{background:'#161b22',border:'1px solid #21262d',borderRadius:12,padding:'24px 20px'}}>
               <div style={{fontSize:28,marginBottom:12}}>{icon}</div>
               <div style={{fontWeight:700,fontSize:14,marginBottom:8}}>{title}</div>
@@ -248,11 +248,11 @@ export default function App(){
       </div>
       <div style={{textAlign:'center',padding:'40px 24px 64px',borderTop:'1px solid #21262d'}}>
         <h2 style={{fontSize:22,fontWeight:900,marginBottom:12}}>지금 시작해볼까요? 🚀</h2>
-        <p style={{color:'#8b949e',fontSize:13,marginBottom:24}}>Gemini API 키만 있으면 누구나 무료로 사용 가능!</p>
+        <p style={{color:'#8b949e',fontSize:13,marginBottom:24}}> API 키만 있으면 누구나 무료로 사용 가능!</p>
         <button onClick={()=>setPage('app')} style={{padding:'14px 36px',borderRadius:10,border:'none',background:'#58a6ff',color:'#000',fontSize:16,fontWeight:700,cursor:'pointer'}}>📚 StudyBot 열기</button>
       </div>
       <div style={{borderTop:'1px solid #21262d',padding:'20px 24px',textAlign:'center',fontSize:12,color:'#484f58'}}>
-        StudyBot · AIFFEL 부트캠프 학습 도우미 · Powered by Google Gemini
+        StudyBot · AIFFEL 부트캠프 학습 도우미 · Powered by Google 
       </div>
     </div>
   );
@@ -263,7 +263,7 @@ export default function App(){
       <div style={{background:'#161b22',borderBottom:'1px solid #21262d',padding:'7px 12px',display:'flex',alignItems:'center',gap:5,overflowX:'auto',flexShrink:0,scrollbarWidth:'none'}}>
         <button onClick={()=>{setPage('home');setAnswer('');}} style={{padding:'3px 10px',borderRadius:16,border:'1px solid #21262d',background:'transparent',color:'#8b949e',fontSize:11,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>← 홈</button>
         <span style={{color:'#58a6ff',fontWeight:700,fontSize:13,marginRight:4,whiteSpace:'nowrap'}}>📚 StudyBot</span>
-        <span style={{fontSize:10,background:'#1a2e1a',color:'#22c55e',padding:'1px 7px',borderRadius:99,border:'1px solid #22c55e44',marginRight:4,flexShrink:0}}>Gemini</span>
+        <span style={{fontSize:10,background:'#1a2e1a',color:'#22c55e',padding:'1px 7px',borderRadius:99,border:'1px solid #22c55e44',marginRight:4,flexShrink:0}}></span>
         {GROUPS.map(g=>(
           <span key={g.label} style={{display:'flex',alignItems:'center',gap:4}}>
             <span style={{fontSize:10,color:'#484f58',borderLeft:'1px solid #21262d',paddingLeft:8,marginLeft:2,whiteSpace:'nowrap'}}>{g.label}</span>
@@ -301,7 +301,7 @@ export default function App(){
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'#484f58',textAlign:'center'}}>
               <div style={{fontSize:40}}>🤖</div>
               <div style={{fontSize:14,fontWeight:600,color:'#8b949e'}}>학습할 주제를 선택해요</div>
-              <div style={{fontSize:12,lineHeight:1.7}}>왼쪽 목차에서 항목을 클릭하면<br/>Gemini AI가 바로 설명해드려요!</div>
+              <div style={{fontSize:12,lineHeight:1.7}}>왼쪽 목차에서 항목을 클릭하면<br/> AI가 바로 설명해드려요!</div>
             </div>
           )}
           {loading&&(
@@ -310,7 +310,7 @@ export default function App(){
               <div style={{display:'flex',alignItems:'center',gap:8,padding:'24px 0'}}>
                 {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'bounce 1s infinite',animationDelay:`${i*0.15}s`}}/>)}
                 <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0.6)}40%{transform:scale(1)}}`}</style>
-                <span style={{color:'#8b949e',fontSize:13}}>Gemini AI가 답변을 작성하고 있어요...</span>
+                <span style={{color:'#8b949e',fontSize:13}}> AI가 답변을 작성하고 있어요...</span>
               </div>
             </div>
           )}
@@ -318,7 +318,7 @@ export default function App(){
           {answer&&!loading&&(
             <div>
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16,paddingBottom:12,borderBottom:'1px solid #21262d',flexWrap:'wrap'}}>
-                <span style={{fontSize:11,background:'#1a2e1a',color:'#22c55e',padding:'3px 10px',borderRadius:99,border:'1px solid #22c55e44'}}>Gemini AI</span>
+                <span style={{fontSize:11,background:'#1a2e1a',color:'#22c55e',padding:'3px 10px',borderRadius:99,border:'1px solid #22c55e44'}}> AI</span>
                 <span style={{fontSize:11,background:'#1f3354',color:'#58a6ff',padding:'3px 10px',borderRadius:99,border:'1px solid #30507a'}}>{LVL[level].label}</span>
                 <span style={{fontSize:11,color:'#8b949e'}}>{s.emoji} {s.name}</span>
                 <span style={{fontSize:11,color:'#484f58'}}>›</span>
@@ -337,7 +337,7 @@ export default function App(){
         </div>
       </div>
       <div style={{background:'#161b22',borderTop:'1px solid #21262d',padding:'6px 14px',fontSize:11,color:'#484f58',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-        <span>📚 StudyBot · Powered by Google Gemini</span>
+        <span>📚 StudyBot · Powered by Google </span>
         <span style={{color:loading?'#f59e0b':answer?'#22c55e':'#484f58'}}>{loading?'⏳ 답변 생성 중...':answer?`✅ ${currentTitle}`:'목차를 클릭해서 학습 시작!'}</span>
       </div>
     </div>
