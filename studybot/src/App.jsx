@@ -145,9 +145,9 @@ const SCI_S = [
   { k: "earth", l: "지구과학", c: "#f472b6" },
 ];
 
-async function callGemini(apiKey, prompt) {
+async function callGemini(apiKey, prompt, onChunk) {
   const model = "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:streamGenerateContent?key=${apiKey}`;
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -158,40 +158,84 @@ async function callGemini(apiKey, prompt) {
           parts: [
             {
               text:
-                "당신은 친절하고 실력 있는 학습 도우미입니다. 한국어로 명확하고 체계적으로 설명해주세요. 코드 예시와 비유를 적극 활용하고, 마크다운 형식으로 답변해주세요.\n\n" +
+                "당신은 매우 뛰어난 전문 튜터입니다. 반드시 아래 규칙을 지켜 설명하세요:
+" +
+                "
+[설명 구조]
+" +
+                "1. 먼저 핵심 개념을 쉽게 설명 (비유 포함)
+" +
+                "2. 왜 중요한지 (사용 이유)
+" +
+                "3. 실제 예시 (생활 또는 코딩)
+" +
+                "4. 코드 예시 (가능하면)
+" +
+                "5. 초보자가 헷갈리는 포인트 정리
+" +
+                "6. 한 줄 핵심 요약
+" +
+                "
+[중요 규칙]
+" +
+                "- 절대 짧게 설명하지 말 것
+" +
+                "- 중간 생략 금지 (단계별 설명 필수)
+" +
+                "- 어려운 용어는 반드시 풀어서 설명
+" +
+                "- 핵심 키워드는 **굵게 표시**
+" +
+                "- 초보자가 이해할 수 있도록 설명
+
+" +
                 prompt,
             },
           ],
         },
       ],
       generationConfig: {
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
         temperature: 0.7,
       },
     }),
   });
 
-  const data = await response.json().catch(() => ({}));
+  if (!response.body) throw new Error("스트리밍 응답을 받을 수 없습니다.");
 
-  if (!response.ok) {
-    const message = data?.error?.message || `HTTP ${response.status} 오류가 발생했습니다.`;
-    throw new Error(message);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+
+  let fullText = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value, { stream: true });
+
+    const lines = chunk.split("
+");
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const json = JSON.parse(line);
+        const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          fullText += text;
+          if (onChunk) onChunk(fullText);
+        }
+      } catch (e) {
+        // ignore parsing errors (stream 특성)
+      }
+    }
   }
 
-  if (data?.error) {
-    throw new Error(data.error.message || "Gemini API 오류가 발생했습니다.");
+  if (!fullText) {
+    throw new Error("응답이 비어 있습니다.");
   }
 
-  const text = data?.candidates?.[0]?.content?.parts
-    ?.map((part) => part?.text || "")
-    .join("")
-    .trim();
-
-  if (!text) {
-    throw new Error("응답은 받았지만 텍스트가 비어 있어요. 모델 또는 요청 형식을 다시 확인해주세요.");
-  }
-
-  return text;
+  return fullText;
 }
 
 function fmt(text) {
