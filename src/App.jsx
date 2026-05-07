@@ -1015,8 +1015,7 @@ export default function App() {
 
       <ChatBox apiKey={apiKey} />
 
-      <div style={{ background: "#161b22", borderTop: "1px solid #21262d", padding: "6px 14px", fontSize: 11, color: "#484f58", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <span>📚 StudyBot · Powered by Google Gemini</span>
+      <div style={{ background: "#161b22", borderTop: "1px solid #21262d", padding: "6px 14px", fontSize: 11, color: "#484f58", display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
         <span style={{ color: loading ? "#f59e0b" : answer ? "#22c55e" : "#484f58" }}>
           {loading ? "⏳ 답변 생성 중..." : answer ? `✅ ${currentTitle}` : "목차를 클릭해서 학습 시작!"}
         </span>
