@@ -771,6 +771,15 @@ export default function App() {
           ))}
         </div>
 
+        <div style={{ textAlign: "center", padding: "40px 24px 64px", borderTop: "1px solid #21262d" }}>
+          <button
+            onClick={() => setPage("app")}
+            style={{ padding: "14px 36px", borderRadius: 10, border: "none", background: "#58a6ff", color: "#000", fontSize: 16, fontWeight: 700, cursor: "pointer" }}
+          >
+            StudyBot 열기
+          </button>
+        </div>
+
       </div>
     );
   }
