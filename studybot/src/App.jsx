@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import ChatBox from "./ChatBox";
 
 const SUBJECTS = {
   python: { name: "Python", emoji: "🐍" },
@@ -145,97 +146,73 @@ const SCI_S = [
   { k: "earth", l: "지구과학", c: "#f472b6" },
 ];
 
-async function callGemini(apiKey, prompt, onChunk) {
+async function callGemini(apiKey, prompt, onRetry) {
   const model = "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:streamGenerateContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
+  const body = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          {
+            text: `당신은 매우 뛰어난 전문 튜터입니다. 반드시 아래 규칙을 지켜 설명하세요:
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text:
-                "당신은 매우 뛰어난 전문 튜터입니다. 반드시 아래 규칙을 지켜 설명하세요:
-" +
-                "
 [설명 구조]
-" +
-                "1. 먼저 핵심 개념을 쉽게 설명 (비유 포함)
-" +
-                "2. 왜 중요한지 (사용 이유)
-" +
-                "3. 실제 예시 (생활 또는 코딩)
-" +
-                "4. 코드 예시 (가능하면)
-" +
-                "5. 초보자가 헷갈리는 포인트 정리
-" +
-                "6. 한 줄 핵심 요약
-" +
-                "
+1. 먼저 핵심 개념을 쉽게 설명 (비유 포함)
+2. 왜 중요한지 (사용 이유)
+3. 실제 예시 (생활 또는 코딩)
+4. 코드 예시 (가능하면)
+5. 초보자가 헷갈리는 포인트 정리
+6. 한 줄 핵심 요약
+
 [중요 규칙]
-" +
-                "- 절대 짧게 설명하지 말 것
-" +
-                "- 중간 생략 금지 (단계별 설명 필수)
-" +
-                "- 어려운 용어는 반드시 풀어서 설명
-" +
-                "- 핵심 키워드는 **굵게 표시**
-" +
-                "- 초보자가 이해할 수 있도록 설명
+- 절대 짧게 설명하지 말 것
+- 중간 생략 금지 (단계별 설명 필수)
+- 어려운 용어는 반드시 풀어서 설명
+- 핵심 키워드는 **굵게 표시**
+- 초보자가 이해할 수 있도록 설명
 
-" +
-                prompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: 0.7,
+${prompt}`,
+          },
+        ],
       },
-    }),
+    ],
+    generationConfig: {
+      maxOutputTokens: 4096,
+      temperature: 0.7,
+    },
   });
+  const delays = [1000, 2000, 4000];
 
-  if (!response.body) throw new Error("스트리밍 응답을 받을 수 없습니다.");
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
+    if (!response.ok) {
+      const isRetryable = response.status === 503 || response.status === 429;
 
-  let fullText = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-
-    const lines = chunk.split("
-");
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const json = JSON.parse(line);
-        const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          fullText += text;
-          if (onChunk) onChunk(fullText);
-        }
-      } catch (e) {
-        // ignore parsing errors (stream 특성)
+      if (isRetryable && attempt < delays.length) {
+        if (onRetry) onRetry(attempt + 1);
+        await new Promise((r) => setTimeout(r, delays[attempt]));
+        continue;
       }
+
+      if (isRetryable) {
+        throw new Error("잠시 후 다시 시도해주세요.");
+      }
+
+      throw new Error(await response.text());
     }
-  }
 
-  if (!fullText) {
-    throw new Error("응답이 비어 있습니다.");
-  }
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-  return fullText;
+    if (!text) throw new Error("응답이 비어 있습니다.");
+
+    return text;
+  }
 }
 
 function fmt(text) {
@@ -640,7 +617,10 @@ export default function App() {
     const prompt = `${levelText} ${subText}${title}${LVL[level].suffix}`;
 
     try {
-      const text = await callGemini(apiKey, prompt);
+      const text = await callGemini(apiKey, prompt, (attempt) => {
+        setError(`⏳ 서버가 잠시 바쁩니다, 재시도 중... (${attempt}/3)`);
+      });
+      setError("");
       setAnswer(text);
     } catch (err) {
       const message = err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.";
@@ -1010,6 +990,8 @@ export default function App() {
           )}
         </div>
       </div>
+
+      <ChatBox apiKey={apiKey} />
 
       <div style={{ background: "#161b22", borderTop: "1px solid #21262d", padding: "6px 14px", fontSize: 11, color: "#484f58", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span>📚 StudyBot · Powered by Google Gemini</span>
