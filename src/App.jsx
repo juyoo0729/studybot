@@ -146,6 +146,16 @@ const SCI_S = [
   { k: "earth", l: "지구과학", c: "#f472b6" },
 ];
 
+function toKoreanError(status, rawText = "") {
+  if (status === 401 || rawText.includes("API_KEY_INVALID"))
+    return "API 키가 올바르지 않습니다. 키를 다시 확인해주세요.";
+  if (status === 429) return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
+  if (status === 503) return "서버가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.";
+  if (status === 400) return "요청 형식에 문제가 있습니다. 새로고침 후 다시 시도해주세요.";
+  if (!status) return "인터넷 연결을 확인해주세요.";
+  return "잠시 후 다시 시도해주세요. 문제가 계속되면 새로고침해보세요.";
+}
+
 async function callGemini(apiKey, prompt, onRetry) {
   const model = "gemini-2.5-flash";
   const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
@@ -184,33 +194,37 @@ ${prompt}`,
   const delays = [1000, 2000, 4000];
 
   for (let attempt = 0; attempt <= delays.length; attempt++) {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+    } catch {
+      if (attempt < delays.length) {
+        if (onRetry) onRetry(attempt + 1);
+        await new Promise((r) => setTimeout(r, delays[attempt]));
+        continue;
+      }
+      throw new Error("인터넷 연결을 확인해주세요.");
+    }
 
     if (!response.ok) {
       const isRetryable = response.status === 503 || response.status === 429;
-
       if (isRetryable && attempt < delays.length) {
         if (onRetry) onRetry(attempt + 1);
         await new Promise((r) => setTimeout(r, delays[attempt]));
         continue;
       }
-
-      if (isRetryable) {
-        throw new Error("잠시 후 다시 시도해주세요.");
-      }
-
-      throw new Error(await response.text());
+      let rawText = "";
+      try { rawText = await response.text(); } catch {}
+      throw new Error(toKoreanError(response.status, rawText));
     }
 
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
     if (!text) throw new Error("응답이 비어 있습니다.");
-
     return text;
   }
 }
@@ -563,6 +577,8 @@ export default function App() {
   const [currentTitle, setCurrentTitle] = useState("");
   const [error, setError] = useState("");
   const answerRef = useRef(null);
+  const cacheRef = useRef({});
+  const [cached, setCached] = useState(false);
 
   function saveKey(key) {
     localStorage.setItem("gemini_key", key);
@@ -588,11 +604,21 @@ export default function App() {
   const subjectInfo = SUBJECTS[subj];
 
   async function handleClick(index, title) {
+    const cacheKey = `${tocKey}__${level}__${title}`;
+
     setActiveIdx(index);
+    setCurrentTitle(title);
+    setError("");
+    setCached(false);
+
+    if (cacheRef.current[cacheKey]) {
+      setAnswer(cacheRef.current[cacheKey]);
+      setCached(true);
+      return;
+    }
+
     setLoading(true);
     setAnswer("");
-    setError("");
-    setCurrentTitle(title);
 
     const levelText = level === "beginner" ? "초급" : level === "intermediate" ? "중급" : "상급";
 
@@ -621,12 +647,13 @@ export default function App() {
         setError(`⏳ 서버가 잠시 바쁩니다, 재시도 중... (${attempt}/3)`);
       });
       setError("");
+      cacheRef.current[cacheKey] = text;
       setAnswer(text);
     } catch (err) {
       const message = err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.";
       setError(`❌ ${message}`);
 
-      if (message.includes("API_KEY_INVALID") || message.includes("401")) {
+      if (message.includes("API 키가 올바르지") || message.includes("API_KEY_INVALID") || message.includes("401")) {
         localStorage.removeItem("gemini_key");
         setApiKey("");
       }
@@ -735,18 +762,6 @@ export default function App() {
           ))}
         </div>
 
-        <div style={{ textAlign: "center", padding: "40px 24px 64px", borderTop: "1px solid #21262d" }}>
-          <button
-            onClick={() => setPage("app")}
-            style={{ padding: "14px 36px", borderRadius: 10, border: "none", background: "#58a6ff", color: "#000", fontSize: 16, fontWeight: 700, cursor: "pointer" }}
-          >
-            📚 StudyBot 열기
-          </button>
-        </div>
-
-        <div style={{ borderTop: "1px solid #21262d", padding: "20px 24px", textAlign: "center", fontSize: 12, color: "#484f58" }}>
-          StudyBot · AIFFEL 부트캠프 학습 도우미 · Powered by Google Gemini
-        </div>
       </div>
     );
   }
@@ -947,7 +962,9 @@ export default function App() {
                   <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", animation: "bounce 1s infinite", animationDelay: `${i * 0.15}s` }} />
                 ))}
                 <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0.6)}40%{transform:scale(1)}}`}</style>
-                <span style={{ color: "#8b949e", fontSize: 13 }}>Gemini AI가 답변을 작성하고 있어요...</span>
+                <span style={{ color: "#8b949e", fontSize: 13 }}>
+                  🧠 {subjectInfo.name} · {currentTitle} 설명 생성 중...
+                </span>
               </div>
             </div>
           )}
@@ -964,6 +981,11 @@ export default function App() {
                 <span style={{ fontSize: 11, background: "#1a2e1a", color: "#22c55e", padding: "3px 10px", borderRadius: 99, border: "1px solid #22c55e44" }}>
                   Gemini AI
                 </span>
+                {cached && (
+                  <span style={{ fontSize: 11, background: "#1a2433", color: "#38bdf8", padding: "3px 10px", borderRadius: 99, border: "1px solid #38bdf844" }}>
+                    ⚡ 캐시된 답변
+                  </span>
+                )}
                 <span style={{ fontSize: 11, background: "#1f3354", color: "#58a6ff", padding: "3px 10px", borderRadius: 99, border: "1px solid #30507a" }}>
                   {LVL[level].label}
                 </span>
