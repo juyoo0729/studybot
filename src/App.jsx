@@ -146,87 +146,25 @@ const SCI_S = [
   { k: "earth", l: "지구과학", c: "#f472b6" },
 ];
 
-function toKoreanError(status, rawText = "") {
-  if (status === 401 || rawText.includes("API_KEY_INVALID"))
-    return "API 키가 올바르지 않습니다. 키를 다시 확인해주세요.";
-  if (status === 429) return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
-  if (status === 503) return "서버가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.";
-  if (status === 400) return "요청 형식에 문제가 있습니다. 새로고침 후 다시 시도해주세요.";
-  if (!status) return "인터넷 연결을 확인해주세요.";
-  return "잠시 후 다시 시도해주세요. 문제가 계속되면 새로고침해보세요.";
-}
-
-async function callGemini(apiKey, prompt, onRetry) {
-  const model = "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
-  const body = JSON.stringify({
-    contents: [
-      {
-        parts: [
-          {
-            text: `당신은 매우 뛰어난 전문 튜터입니다. 반드시 아래 규칙을 지켜 설명하세요:
-
-[설명 구조]
-1. 먼저 핵심 개념을 쉽게 설명 (비유 포함)
-2. 왜 중요한지 (사용 이유)
-3. 실제 예시 (생활 또는 코딩)
-4. 코드 예시 (가능하면)
-5. 초보자가 헷갈리는 포인트 정리
-6. 한 줄 핵심 요약
-
-[중요 규칙]
-- 절대 짧게 설명하지 말 것
-- 중간 생략 금지 (단계별 설명 필수)
-- 어려운 용어는 반드시 풀어서 설명
-- 핵심 키워드는 **굵게 표시**
-- 초보자가 이해할 수 있도록 설명
-
-${prompt}`,
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      maxOutputTokens: 4096,
-      temperature: 0.7,
-    },
+async function callGemini(prompt, { signal } = {}) {
+  const response = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "lesson", prompt }),
+    signal,
   });
-  const delays = [1000, 2000, 4000];
 
-  for (let attempt = 0; attempt <= delays.length; attempt++) {
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-      });
-    } catch {
-      if (attempt < delays.length) {
-        if (onRetry) onRetry(attempt + 1);
-        await new Promise((r) => setTimeout(r, delays[attempt]));
-        continue;
-      }
-      throw new Error("인터넷 연결을 확인해주세요.");
-    }
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {}
 
-    if (!response.ok) {
-      const isRetryable = response.status === 503 || response.status === 429;
-      if (isRetryable && attempt < delays.length) {
-        if (onRetry) onRetry(attempt + 1);
-        await new Promise((r) => setTimeout(r, delays[attempt]));
-        continue;
-      }
-      let rawText = "";
-      try { rawText = await response.text(); } catch {}
-      throw new Error(toKoreanError(response.status, rawText));
-    }
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error("응답이 비어 있습니다.");
-    return text;
+  if (!response.ok) {
+    throw new Error(data?.error || "잠시 후 다시 시도해주세요. 문제가 계속되면 새로고침해보세요.");
   }
+
+  if (!data?.text) throw new Error("응답이 비어 있습니다.");
+  return data.text;
 }
 
 function fmt(text) {
@@ -488,85 +426,7 @@ function renderMd(text) {
   return result;
 }
 
-function ApiKeyScreen({ onSave }) {
-  const [key, setKey] = useState("");
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#0d1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ width: "100%", maxWidth: 440, background: "#161b22", border: "1px solid #21262d", borderRadius: 16, padding: 32 }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🔑</div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0", margin: "0 0 8px" }}>Gemini API 키 입력</h2>
-          <p style={{ fontSize: 13, color: "#8b949e", lineHeight: 1.6, margin: 0 }}>
-            무료 API 키를 입력하면
-            <br />
-            누구나 StudyBot을 사용할 수 있어요!
-          </p>
-        </div>
-
-        <div style={{ background: "#0d1117", border: "1px solid #21262d", borderRadius: 10, padding: 16, marginBottom: 20, fontSize: 12, color: "#8b949e", lineHeight: 1.9 }}>
-          <div style={{ fontWeight: 700, color: "#58a6ff", marginBottom: 6 }}>📋 무료 API 키 발급 (2분)</div>
-          <div>
-            1. <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "#58a6ff" }}>aistudio.google.com</a> 접속
-          </div>
-          <div>2. Google 계정으로 로그인</div>
-          <div>
-            3. <strong style={{ color: "#e2e8f0" }}>&quot;Get API key&quot;</strong> 클릭
-          </div>
-          <div>
-            4. <strong style={{ color: "#e2e8f0" }}>&quot;API 키 만들기&quot;</strong> 클릭
-          </div>
-          <div>5. 생성된 키를 아래에 붙여넣기</div>
-        </div>
-
-        <input
-          type="password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder="AIza... 로 시작하는 키 입력"
-          style={{
-            width: "100%",
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "1px solid #30363d",
-            background: "#0d1117",
-            color: "#e2e8f0",
-            fontSize: 13,
-            outline: "none",
-            marginBottom: 12,
-            boxSizing: "border-box",
-          }}
-          onKeyDown={(e) => e.key === "Enter" && key.trim() && onSave(key.trim())}
-        />
-
-        <button
-          onClick={() => key.trim() && onSave(key.trim())}
-          disabled={!key.trim()}
-          style={{
-            width: "100%",
-            padding: "11px",
-            borderRadius: 8,
-            border: "none",
-            background: key.trim() ? "#58a6ff" : "#21262d",
-            color: key.trim() ? "#000" : "#484f58",
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: key.trim() ? "pointer" : "not-allowed",
-          }}
-        >
-          StudyBot 시작하기 🚀
-        </button>
-
-        <p style={{ fontSize: 11, color: "#484f58", textAlign: "center", marginTop: 12 }}>
-          키는 이 기기 브라우저에만 저장돼요
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem("gemini_key") || "");
   const [page, setPage] = useState("home");
   const [subj, setSubj] = useState("python");
   const [level, setLevel] = useState("beginner");
@@ -579,18 +439,16 @@ export default function App() {
   const answerRef = useRef(null);
   const cacheRef = useRef({});
   const requestIdRef = useRef(0);
+  const requestControllerRef = useRef(null);
   const [cached, setCached] = useState(false);
-
-  function saveKey(key) {
-    localStorage.setItem("gemini_key", key);
-    setApiKey(key);
-  }
 
   useEffect(() => {
     if (answerRef.current) answerRef.current.scrollTop = 0;
   }, [answer]);
 
-  if (!apiKey) return <ApiKeyScreen onSave={saveKey} />;
+  useEffect(() => {
+    return () => requestControllerRef.current?.abort();
+  }, []);
 
   const tocKey =
     subj === "math"
@@ -608,6 +466,7 @@ export default function App() {
     const cacheKey = `${tocKey}__${level}__${title}`;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
+    requestControllerRef.current?.abort();
 
     setActiveIdx(index);
     setCurrentTitle(title);
@@ -615,12 +474,15 @@ export default function App() {
     setCached(false);
 
     if (cacheRef.current[cacheKey]) {
+      requestControllerRef.current = null;
       setLoading(false);
       setAnswer(cacheRef.current[cacheKey]);
       setCached(true);
       return;
     }
 
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setLoading(true);
     setAnswer("");
 
@@ -647,25 +509,21 @@ export default function App() {
     const prompt = `${levelText} ${subText}${title}${LVL[level].suffix}`;
 
     try {
-      const text = await callGemini(apiKey, prompt, (attempt) => {
-        if (requestIdRef.current !== requestId) return;
-        setError(`⏳ 서버가 잠시 바쁩니다, 재시도 중... (${attempt}/3)`);
-      });
+      const text = await callGemini(prompt, { signal: controller.signal });
       if (requestIdRef.current !== requestId) return;
       setError("");
       cacheRef.current[cacheKey] = text;
       setAnswer(text);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       if (requestIdRef.current !== requestId) return;
       const message = err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.";
       setError(`❌ ${message}`);
-
-      if (message.includes("API 키가 올바르지") || message.includes("API_KEY_INVALID") || message.includes("401")) {
-        localStorage.removeItem("gemini_key");
-        setApiKey("");
-      }
     } finally {
       if (requestIdRef.current === requestId) {
+        if (requestControllerRef.current === controller) {
+          requestControllerRef.current = null;
+        }
         setLoading(false);
       }
     }
@@ -717,15 +575,6 @@ export default function App() {
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => {
-                localStorage.removeItem("gemini_key");
-                setApiKey("");
-              }}
-              style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid #30363d", background: "transparent", color: "#8b949e", fontSize: 12, cursor: "pointer" }}
-            >
-              🔑 키 변경
-            </button>
             <button
               onClick={() => setPage("app")}
               style={{ padding: "7px 18px", borderRadius: 8, border: "none", background: "#58a6ff", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
@@ -1031,7 +880,7 @@ export default function App() {
         </div>
       </div>
 
-      <ChatBox apiKey={apiKey} />
+      <ChatBox />
     </div>
   );
 }
