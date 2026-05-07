@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 
+function toChatKoreanError(status, rawText = "") {
+  if (status === 401 || rawText.includes("API_KEY_INVALID"))
+    return "API 키가 올바르지 않습니다. 키를 다시 확인해주세요.";
+  if (status === 429) return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
+  if (status === 503) return "서버가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.";
+  if (status === 400) return "요청 형식에 문제가 있습니다. 새로고침 후 다시 시도해주세요.";
+  if (!status) return "인터넷 연결을 확인해주세요.";
+  return "잠시 후 다시 시도해주세요. 문제가 계속되면 새로고침해보세요.";
+}
+
 async function callGeminiChat(apiKey, messages, onRetry) {
   const model = "gemini-2.5-flash";
   const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
@@ -16,11 +26,21 @@ async function callGeminiChat(apiKey, messages, onRetry) {
   const delays = [1000, 2000, 4000];
 
   for (let attempt = 0; attempt <= delays.length; attempt++) {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+    } catch {
+      if (attempt < delays.length) {
+        if (onRetry) onRetry(attempt + 1);
+        await new Promise((r) => setTimeout(r, delays[attempt]));
+        continue;
+      }
+      throw new Error("인터넷 연결을 확인해주세요.");
+    }
 
     if (!response.ok) {
       const isRetryable = response.status === 503 || response.status === 429;
@@ -29,8 +49,9 @@ async function callGeminiChat(apiKey, messages, onRetry) {
         await new Promise((r) => setTimeout(r, delays[attempt]));
         continue;
       }
-      if (isRetryable) throw new Error("잠시 후 다시 시도해주세요.");
-      throw new Error(await response.text());
+      let rawText = "";
+      try { rawText = await response.text(); } catch {}
+      throw new Error(toChatKoreanError(response.status, rawText));
     }
 
     const data = await response.json();
