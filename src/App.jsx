@@ -578,6 +578,7 @@ export default function App() {
   const [error, setError] = useState("");
   const answerRef = useRef(null);
   const cacheRef = useRef({});
+  const requestIdRef = useRef(0);
   const [cached, setCached] = useState(false);
 
   function saveKey(key) {
@@ -605,6 +606,8 @@ export default function App() {
 
   async function handleClick(index, title) {
     const cacheKey = `${tocKey}__${level}__${title}`;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
 
     setActiveIdx(index);
     setCurrentTitle(title);
@@ -612,6 +615,7 @@ export default function App() {
     setCached(false);
 
     if (cacheRef.current[cacheKey]) {
+      setLoading(false);
       setAnswer(cacheRef.current[cacheKey]);
       setCached(true);
       return;
@@ -644,12 +648,15 @@ export default function App() {
 
     try {
       const text = await callGemini(apiKey, prompt, (attempt) => {
+        if (requestIdRef.current !== requestId) return;
         setError(`⏳ 서버가 잠시 바쁩니다, 재시도 중... (${attempt}/3)`);
       });
+      if (requestIdRef.current !== requestId) return;
       setError("");
       cacheRef.current[cacheKey] = text;
       setAnswer(text);
     } catch (err) {
+      if (requestIdRef.current !== requestId) return;
       const message = err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.";
       setError(`❌ ${message}`);
 
@@ -658,7 +665,9 @@ export default function App() {
         setApiKey("");
       }
     } finally {
-      setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
   }
 
