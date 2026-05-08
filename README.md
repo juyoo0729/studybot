@@ -14,6 +14,7 @@ AIFFEL 부트캠프 학습자를 위해 제작되었습니다.
 - **다음 주제 이동** — 답변 하단의 버튼으로 순서대로 학습
 - **자유 채팅(ChatBox)** — 화면 하단에서 언제든 자유롭게 추가 질문 가능
 - **자동 재시도** — 서버 과부하(429/503) 시 최대 3회 자동 재시도
+- **Wikipedia 요약 카드** — Python 등 주제 선택 시 Wikipedia 핵심 요약 자동 표시 (파일럿)
 - **다크 테마** — GitHub 스타일 다크 UI
 - **반응형** — 모바일 포함 모든 화면 크기 지원
 
@@ -25,8 +26,8 @@ AIFFEL 부트캠프 학습자를 위해 제작되었습니다.
 |------|------|
 | 프레임워크 | React 18 |
 | 빌드 도구 | Vite 5 |
-| AI 엔진 | OpenAI Responses API |
-| API 인증 | Vercel 서버 환경 변수 (`OPENAI_API_KEY`) |
+| AI 엔진 | Google Gemini 2.5 Flash |
+| API 인증 | Vercel 서버 환경 변수 (`GEMINI_API_KEY`) |
 | 스타일 | CSS-in-JS (인라인 스타일) |
 | 배포 | Vercel (권장) |
 
@@ -36,10 +37,10 @@ AIFFEL 부트캠프 학습자를 위해 제작되었습니다.
 
 ### 1. 환경 변수 설정
 
-OpenAI API 키를 서버 환경 변수로 설정합니다. 브라우저에는 API 키를 저장하거나 전달하지 않습니다.
+Gemini API 키를 서버 환경 변수로 설정합니다. 브라우저에는 API 키를 저장하거나 전달하지 않습니다.
 
 ```bash
-OPENAI_API_KEY=your_openai_api_key
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ### 2. 로컬 실행
@@ -85,7 +86,7 @@ studybot/
 ├── vite.config.js       # Vite 설정
 ├── package.json         # 패키지 정보
 ├── api/
-│   └── chat.js          # OpenAI 서버 함수
+│   └── chat.js          # Gemini 서버 함수
 ├── public/
 │   └── favicon.svg
 └── src/
