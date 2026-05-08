@@ -146,11 +146,11 @@ const SCI_S = [
   { k: "earth", l: "지구과학", c: "#f472b6" },
 ];
 
-async function callGemini(prompt, { signal } = {}) {
-  const response = await fetch("/api/gemini", {
+async function callAi(prompt, { signal } = {}) {
+  const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "lesson", prompt }),
+    body: JSON.stringify({ message: prompt }),
     signal,
   });
 
@@ -163,8 +163,9 @@ async function callGemini(prompt, { signal } = {}) {
     throw new Error(data?.error || "잠시 후 다시 시도해주세요. 문제가 계속되면 새로고침해보세요.");
   }
 
-  if (!data?.text) throw new Error("응답이 비어 있습니다.");
-  return data.text;
+  const answer = data?.answer || data?.text;
+  if (!answer) throw new Error("응답이 비어 있습니다.");
+  return answer;
 }
 
 function fmt(text) {
@@ -506,10 +507,10 @@ export default function App() {
           } `
         : `${subjectInfo.name} `;
 
-    const prompt = `${levelText} ${subText}${title}${LVL[level].suffix}`;
+    const prompt = `다음 학습 주제를 단계별로 자세히 설명해주세요. 핵심 키워드는 **굵게** 표시하고, 예시와 한 줄 요약을 포함해주세요.\n\n${levelText} ${subText}${title}${LVL[level].suffix}`;
 
     try {
-      const text = await callGemini(prompt, { signal: controller.signal });
+      const text = await callAi(prompt, { signal: controller.signal });
       if (requestIdRef.current !== requestId) return;
       setError("");
       cacheRef.current[cacheKey] = text;

@@ -1,6 +1,6 @@
 # StudyBot
 
-12개 과목, 200개 이상의 학습 주제를 클릭 한 번으로 **Google Gemini AI**에게 질문할 수 있는 학습 도우미 앱입니다.  
+12개 과목, 200개 이상의 학습 주제를 클릭 한 번으로 **AI 학습 도우미**에게 질문할 수 있는 학습 도우미 앱입니다.  
 AIFFEL 부트캠프 학습자를 위해 제작되었습니다.
 
 ---
@@ -25,8 +25,8 @@ AIFFEL 부트캠프 학습자를 위해 제작되었습니다.
 |------|------|
 | 프레임워크 | React 18 |
 | 빌드 도구 | Vite 5 |
-| AI 엔진 | Google Gemini 2.5 Flash |
-| API 인증 | Google AI Studio (무료) |
+| AI 엔진 | OpenAI Responses API |
+| API 인증 | Vercel 서버 환경 변수 (`OPENAI_API_KEY`) |
 | 스타일 | CSS-in-JS (인라인 스타일) |
 | 배포 | Vercel (권장) |
 
@@ -34,11 +34,13 @@ AIFFEL 부트캠프 학습자를 위해 제작되었습니다.
 
 ## 빠른 시작
 
-### 1. Gemini API 키 발급 (무료, 약 2분)
+### 1. 환경 변수 설정
 
-1. [aistudio.google.com](https://aistudio.google.com) 접속 후 Google 계정 로그인
-2. **Get API key** 클릭 → **API 키 만들기** 클릭
-3. 생성된 키(`AIza...` 형태) 복사
+OpenAI API 키를 서버 환경 변수로 설정합니다. 브라우저에는 API 키를 저장하거나 전달하지 않습니다.
+
+```bash
+OPENAI_API_KEY=your_openai_api_key
+```
 
 ### 2. 로컬 실행
 
@@ -48,8 +50,7 @@ npm run dev
 # http://localhost:5173 에서 확인
 ```
 
-앱 첫 화면에서 복사한 API 키를 입력하면 바로 시작됩니다.  
-키는 브라우저 `localStorage`에만 저장되며 서버로 전송되지 않습니다.
+AI 요청은 Vercel 서버 함수(`/api/chat`)를 통해 처리됩니다.
 
 ---
 
@@ -83,6 +84,8 @@ studybot/
 ├── index.html           # 앱 진입점
 ├── vite.config.js       # Vite 설정
 ├── package.json         # 패키지 정보
+├── api/
+│   └── chat.js          # OpenAI 서버 함수
 ├── public/
 │   └── favicon.svg
 └── src/
