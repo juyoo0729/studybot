@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import ChatBox from "./ChatBox";
+import { fetchWikiSummary } from "./wiki";
 
 const SUBJECTS = {
   python: { name: "Python", emoji: "🐍" },
@@ -427,6 +428,42 @@ function renderMd(text) {
   return result;
 }
 
+function WikiCard({ summary }) {
+  const [open, setOpen] = useState(false);
+  const short = summary.extract.length > 200
+    ? summary.extract.slice(0, 200) + "…"
+    : summary.extract;
+
+  return (
+    <div style={{ background: "#0f1f2e", border: "1px solid #1e3a5f", borderRadius: 8, marginBottom: 16, overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen((p) => !p)}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+      >
+        <span style={{ fontSize: 10, background: "#1e3a5f", color: "#58a6ff", padding: "2px 8px", borderRadius: 99, fontWeight: 700, flexShrink: 0 }}>
+          Wikipedia
+        </span>
+        <span style={{ fontSize: 12, color: "#58a6ff", fontWeight: 600 }}>{summary.title}</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "#484f58", flexShrink: 0 }}>
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+
+      <div style={{ padding: "0 12px 10px", fontSize: 12, color: "#8b949e", lineHeight: 1.7 }}>
+        {open ? summary.extract : short}
+      </div>
+
+      {summary.url && (
+        <div style={{ padding: "0 12px 10px" }}>
+          <a href={summary.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#58a6ff", textDecoration: "none" }}>
+            Wikipedia에서 전체 보기 →
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [page, setPage] = useState("home");
   const [subj, setSubj] = useState("python");
@@ -442,6 +479,7 @@ export default function App() {
   const requestIdRef = useRef(0);
   const requestControllerRef = useRef(null);
   const [cached, setCached] = useState(false);
+  const [wikiSummary, setWikiSummary] = useState(null);
 
   useEffect(() => {
     if (answerRef.current) answerRef.current.scrollTop = 0;
@@ -473,6 +511,8 @@ export default function App() {
     setCurrentTitle(title);
     setError("");
     setCached(false);
+    setWikiSummary(null);
+    fetchWikiSummary(title).then(setWikiSummary);
 
     if (cacheRef.current[cacheKey]) {
       requestControllerRef.current = null;
@@ -825,6 +865,7 @@ export default function App() {
               <div style={{ fontSize: 12, color: "#484f58", marginBottom: 12 }}>
                 {subjectInfo.emoji} {subjectInfo.name} › {currentTitle}
               </div>
+              {wikiSummary && <WikiCard summary={wikiSummary} />}
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "24px 0" }}>
                 {[0, 1, 2].map((i) => (
                   <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", animation: "bounce 1s infinite", animationDelay: `${i * 0.15}s` }} />
@@ -864,6 +905,7 @@ export default function App() {
                 <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>{currentTitle}</span>
               </div>
 
+              {wikiSummary && <WikiCard summary={wikiSummary} />}
               <div>{renderMd(answer)}</div>
 
               {activeIdx !== null && activeIdx < items.length - 1 && (
