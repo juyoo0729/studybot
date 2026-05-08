@@ -478,6 +478,7 @@ export default function App() {
   const cacheRef = useRef({});
   const requestIdRef = useRef(0);
   const requestControllerRef = useRef(null);
+  const wikiControllerRef = useRef(null);
   const [cached, setCached] = useState(false);
   const [wikiSummary, setWikiSummary] = useState(null);
 
@@ -512,7 +513,10 @@ export default function App() {
     setError("");
     setCached(false);
     setWikiSummary(null);
-    fetchWikiSummary(title).then(setWikiSummary);
+    wikiControllerRef.current?.abort();
+    const wikiCtrl = new AbortController();
+    wikiControllerRef.current = wikiCtrl;
+    fetchWikiSummary(title, wikiCtrl.signal).then(setWikiSummary);
 
     if (cacheRef.current[cacheKey]) {
       requestControllerRef.current = null;

@@ -4,14 +4,14 @@ const WIKI_MAP = {
   "변수와 자료형": "변수_(컴퓨터_과학)",
 };
 
-export async function fetchWikiSummary(topicTitle) {
+export async function fetchWikiSummary(topicTitle, signal) {
   const slug = WIKI_MAP[topicTitle];
   if (!slug) return null;
 
   try {
     const res = await fetch(
       `https://ko.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`,
-      { headers: { Accept: "application/json" } }
+      { headers: { Accept: "application/json" }, signal }
     );
     if (!res.ok) return null;
     const data = await res.json();
