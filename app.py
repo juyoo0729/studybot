@@ -1,5 +1,4 @@
 import os
-import re
 import streamlit as st
 from dotenv import load_dotenv
 from llm_client import ask_all, build_prompt
@@ -18,28 +17,6 @@ OLLAMA_MODELS = {
     "gemma2:9b":       "💎 Gemma 2 (Google, 균형형, 9B)",
     "llama3.2:3b":     "🦙 Llama 3.2 (Meta, 경량 빠름, 3B)",
 }
-
-
-def save_gemini_key_to_env(key: str) -> None:
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    try:
-        lines = open(env_path, encoding="utf-8").readlines() if os.path.exists(env_path) else []
-    except Exception:
-        lines = []
-
-    updated = False
-    new_lines = []
-    for line in lines:
-        if re.match(r"^\s*GEMINI_API_KEY\s*=", line):
-            new_lines.append(f"GEMINI_API_KEY={key}\n")
-            updated = True
-        else:
-            new_lines.append(line)
-    if not updated:
-        new_lines.append(f"GEMINI_API_KEY={key}\n")
-
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
 
 
 # ── 페이지 설정 ─────────────────────────────────────────────────────────────
@@ -77,6 +54,7 @@ with st.sidebar:
     use_groq = st.checkbox("Groq · Llama 3.3 70b")
     groq_key = ""
     if use_groq:
+        st.markdown('<a href="https://console.groq.com/keys" target="_blank">🔑 Groq API 키 발급받기</a>', unsafe_allow_html=True)
         groq_key = st.text_input("Groq API Key", type="password", placeholder="gsk_...")
 
     st.divider()
@@ -84,18 +62,13 @@ with st.sidebar:
     use_gemini = st.checkbox("Gemini 2.5 Flash")
     gemini_key = ""
     if use_gemini:
+        st.markdown('<a href="https://aistudio.google.com/app/apikey" target="_blank">🔑 Google AI Studio에서 발급받기</a>', unsafe_allow_html=True)
         gemini_key = st.text_input(
             "Gemini API Key",
             value=os.getenv("GEMINI_API_KEY", ""),
             type="password",
             placeholder="AIza...",
         )
-        if st.button("💾 .env에 저장"):
-            if gemini_key:
-                save_gemini_key_to_env(gemini_key)
-                st.success("저장 완료 — 다음 실행부터 자동 로드됩니다.")
-            else:
-                st.warning("키를 입력하세요.")
 
 # ── 메인 ─────────────────────────────────────────────────────────────────────
 
@@ -131,7 +104,7 @@ if no_llm:
 
 if run and targets and question.strip():
     prompt = build_prompt(mode, question.strip())
-    cache_key = f"{mode}__{question.strip()}__{[t['provider'] for t in targets]}"
+    cache_key = f"{mode}__{question.strip()}__{'|'.join(t['provider'] for t in targets)}"
 
     if cache_key not in st.session_state:
         # 상태 표시

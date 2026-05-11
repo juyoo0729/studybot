@@ -156,6 +156,28 @@ streamlit run app.py
 - 코드 어디에도 키 하드코딩 없음
 - 사용자 자신의 키만 사용 (BYOK 패턴)
 
+## 🔄 코드 개선 이력
+
+Claude Code + Codex Plugin 크로스 리뷰 워크플로우로 완료한 개선 작업입니다.
+
+### 보안 수정 4건
+- Gemini API 키를 URL 쿼리 파라미터 → `x-goog-api-key` 헤더로 이동 (로그 노출 방지)
+- Gemini endpoint `/v1/` → `/v1beta/` 수정
+- UI의 `.env` 저장 버튼 제거 (세션 메모리 only 원칙 일관화)
+- Gemini 빈 `candidates` 응답 시 IndexError → 에러 딕셔너리로 방어
+
+### 코드 품질 4건
+- `ask_ollama` 재시도 로직 추가 (Groq/Gemini와 동일 패턴으로 일관화)
+- 미사용 `groq` 패키지 `requirements.txt`에서 제거
+- 캐시 키 안정화 (`list` str 표현 → `|` 구분 join)
+- 미사용 `attempt` 변수 제거
+
+### UX 개선
+- Groq/Gemini API 키 발급 사이트 링크를 사이드바에 추가 (새 탭 열기)
+
+### Codex Plugin 크로스 리뷰
+- `ask_ollama` 재시도 리팩토링 후 파싱 오류 미처리 회귀 버그(P2) 발견 → 즉시 수정
+
 ## 💡 개발 과정에서 배운 점
 
 이 프로젝트의 진짜 가치는 도구 자체보다 **만들면서 부딪힌 문제들을 풀어가는 과정**에 있었습니다.
@@ -189,6 +211,18 @@ streamlit run app.py
 - API 키 보안을 위해 사용자가 직접 키 입력하는 구조 채택
 - 키는 세션 메모리에만, 코드에 하드코딩 없음
 - 키 발급 안내 + 분실 방지 경고로 사용자 친화적 UX
+
+### Cross-review 워크플로우의 가치
+
+- Claude Code로 구현 후 Codex Plugin으로 독립 리뷰
+- 재시도 로직 추가 중 파싱 오류 미처리 회귀 버그(P2) 발견
+- 구현과 리뷰를 분리하면 놓치기 쉬운 엣지 케이스를 잡을 수 있음
+
+### API 보안 표준 패턴
+
+- API 키를 URL 쿼리 파라미터에 넣으면 서버 로그·프록시에 노출됨을 직접 확인
+- Gemini `?key=` → `x-goog-api-key` 헤더로 전환
+- 키가 어디로 전달되는지 의식적으로 확인하는 습관 필요
 
 ## 🔧 향후 개선 방향
 

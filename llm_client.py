@@ -18,7 +18,8 @@ PROMPTS = {
         "당신은 친절한 학습 튜터입니다. 아래 질문에 대해:\n"
         "1. 핵심 개념 설명 (비유 포함)\n"
         "2. 실제 예시와 코드 예시\n"
-        "3. 기초 연습 문제 3개 (각 문제 후 정답을 <details><summary>정답 보기</summary> ... </details> 형식으로)\n\n"
+        "3. 기초 연습 문제 3개 (각 문제 후 정답을 아래 형식으로 작성)\n\n"
+        "**정답:** (정답 내용)\n\n"
         "핵심 키워드는 **굵게**, 문제는 개념 이해를 확인할 수 있게.\n\n"
     ),
     "advanced": (
@@ -41,21 +42,34 @@ def _retry_sleep(delay: float) -> None:
 def ask_ollama(prompt: str, model: str = "qwen2.5:7b", base_url: str = "http://localhost:11434") -> dict:
     start = time.time()
     label = f"Ollama · {model}"
-    try:
-        resp = requests.post(
-            f"{base_url.rstrip('/')}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=180,
-        )
+    for delay in [*BASE_DELAYS, None]:
+        try:
+            resp = requests.post(
+                f"{base_url.rstrip('/')}/api/generate",
+                json={"model": model, "prompt": prompt, "stream": False},
+                timeout=180,
+            )
+        except requests.exceptions.Timeout:
+            return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": "타임아웃 (180s)"}
+        except requests.RequestException as e:
+            if delay is None:
+                return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": str(e)}
+            _retry_sleep(delay)
+            continue
+
         elapsed = round(time.time() - start, 2)
         if resp.status_code == 200:
-            text = resp.json().get("response", "").strip()
+            try:
+                text = resp.json().get("response", "").strip()
+            except Exception as e:
+                return {"model": label, "response": "", "elapsed": elapsed, "error": f"응답 파싱 오류: {e}"}
             return {"model": label, "response": text, "elapsed": elapsed, "error": None}
+        if resp.status_code in RETRY_STATUSES and delay is not None:
+            _retry_sleep(delay)
+            continue
         return {"model": label, "response": "", "elapsed": elapsed, "error": f"HTTP {resp.status_code}"}
-    except requests.exceptions.Timeout:
-        return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": "타임아웃 (180s)"}
-    except Exception as e:
-        return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": str(e)}
+
+    return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": "재시도 초과"}
 
 
 def ask_groq(prompt: str, api_key: str, model: str = "llama-3.3-70b-versatile") -> dict:
@@ -68,7 +82,7 @@ def ask_groq(prompt: str, api_key: str, model: str = "llama-3.3-70b-versatile") 
         "max_tokens": 4096,
         "temperature": 0.7,
     }
-    for attempt, delay in enumerate([*BASE_DELAYS, None]):
+    for delay in [*BASE_DELAYS, None]:
         try:
             resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=body, timeout=60)
         except requests.RequestException as e:
@@ -94,14 +108,15 @@ def ask_groq(prompt: str, api_key: str, model: str = "llama-3.3-70b-versatile") 
 def ask_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> dict:
     start = time.time()
     label = f"Gemini · {model}"
-    url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.7},
     }
-    for attempt, delay in enumerate([*BASE_DELAYS, None]):
+    for delay in [*BASE_DELAYS, None]:
         try:
-            resp = requests.post(url, json=body, timeout=60)
+            resp = requests.post(url, headers=headers, json=body, timeout=60)
         except requests.RequestException as e:
             if delay is None:
                 return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": str(e)}
@@ -110,8 +125,10 @@ def ask_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> di
 
         elapsed = round(time.time() - start, 2)
         if resp.status_code == 200:
-            text = (resp.json().get("candidates", [{}])[0]
-                    .get("content", {}).get("parts", [{}])[0].get("text", "").strip())
+            candidates = resp.json().get("candidates") or []
+            if not candidates:
+                return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
+            text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
             if not text:
                 return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
             return {"model": label, "response": text, "elapsed": elapsed, "error": None}
