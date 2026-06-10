@@ -49,11 +49,10 @@ def ask_ollama(prompt: str, model: str = "qwen2.5:7b", base_url: str = "http://l
                 json={"model": model, "prompt": prompt, "stream": False},
                 timeout=180,
             )
-        except requests.exceptions.Timeout:
-            return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": "타임아웃 (180s)"}
         except requests.RequestException as e:
             if delay is None:
-                return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": str(e)}
+                msg = "타임아웃 (180s)" if isinstance(e, requests.exceptions.Timeout) else str(e)
+                return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": msg}
             _retry_sleep(delay)
             continue
 
@@ -93,13 +92,27 @@ def ask_groq(prompt: str, api_key: str, model: str = "llama-3.3-70b-versatile") 
 
         elapsed = round(time.time() - start, 2)
         if resp.status_code == 200:
-            text = resp.json()["choices"][0]["message"]["content"].strip()
+            try:
+                choices = resp.json().get("choices") or []
+                if not choices:
+                    return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
+                text = choices[0].get("message", {}).get("content", "").strip()
+                if not text:
+                    return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
+            except Exception as e:
+                return {"model": label, "response": "", "elapsed": elapsed, "error": f"응답 파싱 오류: {e}"}
             return {"model": label, "response": text, "elapsed": elapsed, "error": None}
         if resp.status_code in RETRY_STATUSES and delay is not None:
             _retry_sleep(delay)
             continue
 
-        msgs = {401: "API 키가 올바르지 않습니다.", 429: "요청이 너무 많습니다.", 400: "요청 형식 오류입니다."}
+        msgs = {
+            400: "요청 형식 오류입니다.",
+            401: "API 키가 올바르지 않습니다.",
+            403: "API 키 권한이 없거나 청구 계정이 연결되지 않았습니다.",
+            429: "요청이 너무 많습니다.",
+            503: "서비스를 일시적으로 사용할 수 없습니다.",
+        }
         return {"model": label, "response": "", "elapsed": elapsed, "error": msgs.get(resp.status_code, f"HTTP {resp.status_code}")}
 
     return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": "재시도 초과"}
@@ -125,18 +138,27 @@ def ask_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> di
 
         elapsed = round(time.time() - start, 2)
         if resp.status_code == 200:
-            candidates = resp.json().get("candidates") or []
-            if not candidates:
-                return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
-            text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
-            if not text:
-                return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
+            try:
+                candidates = resp.json().get("candidates") or []
+                if not candidates:
+                    return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
+                text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+                if not text:
+                    return {"model": label, "response": "", "elapsed": elapsed, "error": "응답이 비어 있습니다."}
+            except Exception as e:
+                return {"model": label, "response": "", "elapsed": elapsed, "error": f"응답 파싱 오류: {e}"}
             return {"model": label, "response": text, "elapsed": elapsed, "error": None}
         if resp.status_code in RETRY_STATUSES and delay is not None:
             _retry_sleep(delay)
             continue
 
-        msgs = {401: "API 키가 올바르지 않습니다.", 429: "요청이 너무 많습니다.", 400: "요청 형식 오류입니다."}
+        msgs = {
+            400: "요청 형식 오류입니다.",
+            401: "API 키가 올바르지 않습니다.",
+            403: "API 키 권한이 없거나 청구 계정이 연결되지 않았습니다.",
+            429: "요청이 너무 많습니다.",
+            503: "서비스를 일시적으로 사용할 수 없습니다.",
+        }
         return {"model": label, "response": "", "elapsed": elapsed, "error": msgs.get(resp.status_code, f"HTTP {resp.status_code}")}
 
     return {"model": label, "response": "", "elapsed": round(time.time() - start, 2), "error": "재시도 초과"}
@@ -148,6 +170,8 @@ def build_prompt(mode: str, question: str) -> str:
 
 def ask_all(targets: list[dict], prompt: str) -> list[dict]:
     """targets: [{"provider":"ollama","model":..,"base_url":..}, {"provider":"groq","api_key":..}, ...]"""
+    if not targets:
+        return []
     results = [None] * len(targets)
 
     def call(idx: int, t: dict) -> tuple[int, dict]:
@@ -155,15 +179,19 @@ def ask_all(targets: list[dict], prompt: str) -> list[dict]:
         if p == "ollama":
             return idx, ask_ollama(prompt, t.get("model", "qwen2.5:7b"), t.get("base_url", "http://localhost:11434"))
         if p == "groq":
-            return idx, ask_groq(prompt, t["api_key"], t.get("model", "llama-3.3-70b-versatile"))
+            return idx, ask_groq(prompt, t.get("api_key", ""), t.get("model", "llama-3.3-70b-versatile"))
         if p == "gemini":
-            return idx, ask_gemini(prompt, t["api_key"], t.get("model", "gemini-2.5-flash"))
+            return idx, ask_gemini(prompt, t.get("api_key", ""), t.get("model", "gemini-2.5-flash"))
         return idx, {"model": p, "response": "", "elapsed": 0.0, "error": f"알 수 없는 provider: {p}"}
 
     with ThreadPoolExecutor(max_workers=len(targets)) as executor:
         futures = {executor.submit(call, i, t): i for i, t in enumerate(targets)}
         for future in as_completed(futures):
-            idx, result = future.result()
+            try:
+                idx, result = future.result()
+            except Exception as e:
+                idx = futures[future]
+                result = {"model": targets[idx].get("provider", "unknown"), "response": "", "elapsed": 0.0, "error": f"내부 오류: {e}"}
             results[idx] = result
 
     return results

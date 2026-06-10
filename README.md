@@ -3,10 +3,11 @@
 > 학습 모드별로 답변 스타일이 달라지는 AI 학습 도우미
 > 로컬 LLM과 클라우드 API를 자유롭게 전환 가능
 
-![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.x-red)
 ![Ollama](https://img.shields.io/badge/Ollama-Qwen2.5-green)
 ![Groq](https://img.shields.io/badge/Groq-Llama_3.3-orange)
+![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-blueviolet)
 
 ## 🎯 프로젝트 소개
 
@@ -56,10 +57,10 @@ Groq API 키를 사용자가 직접 발급받아 입력합니다:
 
 | 분류 | 기술 |
 |---|---|
-| 언어 | Python 3.12 |
+| 언어 | Python 3.11+ |
 | 웹 UI | Streamlit |
 | 로컬 LLM | Ollama (qwen2.5:7b) |
-| 클라우드 API | Groq (Llama 3.3 70b) |
+| 클라우드 API | Groq (Llama 3.3 70b), Gemini (2.5 Flash) |
 | 환경 변수 | python-dotenv |
 
 ## 🔑 API 키 발급
@@ -73,11 +74,13 @@ Groq API 키를 사용자가 직접 발급받아 입력합니다:
 ## 📁 프로젝트 구조
 
 ```
-studybot/
+studybot-v2/
 ├── app.py              # Streamlit 메인 UI
-├── llm_client.py       # LLM 호출 (qwen + Groq)
+├── llm_client.py       # LLM 호출 (Ollama + Groq + Gemini)
+├── .streamlit/
+│   └── config.toml     # 서버 설정 (localhost 바인딩, 포트 9999)
 ├── requirements.txt
-├── .env.example        # 환경변수 템플릿
+├── .env.example        # 환경변수 템플릿 (GEMINI_API_KEY)
 ├── .gitignore
 └── README.md
 ```
@@ -118,13 +121,24 @@ ollama pull qwen2.5:7b
 
 결제카드 등록 없이 무료 한도(분당 30개, 일일 14,400개)로 사용 가능합니다.
 
-### 5. 실행
+### 5. (선택) Gemini API 키 설정
+
+[aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)에서 키를 발급받은 뒤,
+앱 사이드바에 직접 입력하거나 환경변수로 설정할 수 있습니다:
+
+```bash
+copy .env.example .env    # 후 GEMINI_API_KEY 값 입력
+```
+
+환경변수 키는 `AIza` 형식일 때만 입력창에 자동 채워집니다 (잘못된 값 유입 방지).
+
+### 6. 실행
 
 ```bash
 streamlit run app.py
 ```
 
-브라우저에서 `http://localhost:8501` 자동 오픈.
+브라우저에서 `http://localhost:9999` 자동 오픈 (`.streamlit/config.toml`에서 포트 지정).
 
 ## 💡 사용 방법
 
@@ -155,6 +169,8 @@ streamlit run app.py
 - `.env` 파일은 `.gitignore`로 제외
 - 코드 어디에도 키 하드코딩 없음
 - 사용자 자신의 키만 사용 (BYOK 패턴)
+- 서버는 `localhost`에만 바인딩 (`.streamlit/config.toml`) — 외부 네트워크 노출 방지
+- 환경변수 Gemini 키는 `AIza` 형식 검증 후에만 자동 입력
 
 ## 🔄 코드 개선 이력
 
@@ -177,6 +193,16 @@ Claude Code + Codex Plugin 크로스 리뷰 워크플로우로 완료한 개선 
 
 ### Codex Plugin 크로스 리뷰
 - `ask_ollama` 재시도 리팩토링 후 파싱 오류 미처리 회귀 버그(P2) 발견 → 즉시 수정
+
+### 2차 개선 (2026.06)
+- Groq 응답 파싱 방어 추가 — 빈 `choices`/본문, 파싱 예외를 에러 딕셔너리로 처리 (Gemini와 동일 패턴)
+- HTTP 403/503 에러에 사용자 친화적 안내 메시지 추가 (Groq/Gemini 공통)
+- 환경변수 Gemini 키가 `AIza` 형식일 때만 입력창 자동 채움 (placeholder 등 잘못된 값 유입 방지)
+- 캐시 키에 Ollama 모델명 포함 — 모델 변경 시 이전 모델 응답이 재사용되던 문제 해결
+- `ask_all` 빈 타깃 가드 추가
+- `ask_ollama` 타임아웃 처리를 재시도 루프와 일관되게 통합
+- `.streamlit/config.toml` 추가 — localhost 바인딩, 포트 9999 고정
+- `.env.example` 템플릿에 `GEMINI_API_KEY` 추가
 
 ## 💡 개발 과정에서 배운 점
 
@@ -224,9 +250,22 @@ Claude Code + Codex Plugin 크로스 리뷰 워크플로우로 완료한 개선 
 - Gemini `?key=` → `x-goog-api-key` 헤더로 전환
 - 키가 어디로 전달되는지 의식적으로 확인하는 습관 필요
 
+## 🚀 다음 버전: StudyBot v3
+
+자유 질문 채팅의 한계(질문을 떠올리는 부담, 일회성 학습)를 넘기 위해
+**고정 워크플로우형 학습 앱**으로 방향을 바꾼 후속 버전을 개발했습니다.
+
+- 노트 붙여넣기 → 개념 추출 → 퀴즈 5문제 생성 → 풀기/채점 → 복습 스케줄링의 5단계 고정 파이프라인
+- LLM(Gemini) 호출은 개념 추출·퀴즈 생성 2곳뿐, 채점·스케줄링은 결정적 로직
+- SM-2 간격 반복 알고리즘 직접 구현으로 복습 일정 자동 관리 (pytest 검증)
+- 저장소는 로컬 JSON — 앱을 껐다 켜도 복습 스케줄 유지
+
+→ 로컬 폴더: `../studybot-v3`
+
 ## 🔧 향후 개선 방향
 
-- [ ] 학습 히스토리 (최근 질문 5개 표시)
+- [x] 학습 히스토리 → v3에서 세션 기록(`sessions.json`)으로 구현
+- [x] 일회성 답변의 한계 → v3에서 SM-2 기반 복습 스케줄링으로 해결
 - [ ] 답변 북마크 기능
 - [ ] 마크다운/코드 하이라이팅 개선
 - [ ] 다른 무료 LLM 옵션 추가 (Together AI, OpenRouter 등)
@@ -245,6 +284,7 @@ ML/Data Science 분야 전환 준비 중
 
 ## 🔗 관련 프로젝트
 
+- **StudyBot v3** — 본 프로젝트의 후속 버전, 워크플로우형 학습 앱 (위 "다음 버전" 참고)
 - [korea-finance-news-tracker](https://github.com/juyoo0729/korea-finance-news-tracker) — 한국 금융 뉴스 자동 수집 도구
 
 ---

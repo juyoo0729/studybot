@@ -1,0 +1,4 @@
+[server]
+port = 9999
+address = "localhost"
+# studybot-v2 — 미사용 (제외됨)

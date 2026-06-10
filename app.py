@@ -63,9 +63,10 @@ with st.sidebar:
     gemini_key = ""
     if use_gemini:
         st.markdown('<a href="https://aistudio.google.com/app/apikey" target="_blank">🔑 Google AI Studio에서 발급받기</a>', unsafe_allow_html=True)
+        _env_gemini = os.getenv("GEMINI_API_KEY", "")
         gemini_key = st.text_input(
             "Gemini API Key",
-            value=os.getenv("GEMINI_API_KEY", ""),
+            value=_env_gemini if _env_gemini.startswith("AIza") else "",
             type="password",
             placeholder="AIza...",
         )
@@ -104,7 +105,8 @@ if no_llm:
 
 if run and targets and question.strip():
     prompt = build_prompt(mode, question.strip())
-    cache_key = f"{mode}__{question.strip()}__{'|'.join(t['provider'] for t in targets)}"
+    _keys = [f"ollama:{t.get('model','qwen2.5:7b')}" if t["provider"] == "ollama" else t["provider"] for t in targets]
+    cache_key = f"{mode}__{question.strip()}__{'|'.join(_keys)}"
 
     if cache_key not in st.session_state:
         # 상태 표시
