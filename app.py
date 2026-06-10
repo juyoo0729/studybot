@@ -1,144 +1,83 @@
+"""StudyBot — 고정 워크플로우형 학습 앱 (Streamlit 진입점, 단계 라우팅)."""
 import os
+
 import streamlit as st
 from dotenv import load_dotenv
-from llm_client import ask_all, build_prompt
+
+from ui import concepts, dashboard, note_input, quiz, result
 
 load_dotenv()
 
-MODES = {
-    "explain":      "📖 설명",
-    "explain_quiz": "📝 설명 + 기본문제",
-    "advanced":     "🔥 심화문제",
+st.set_page_config(page_title="StudyBot", page_icon="📘", layout="centered")
+
+STEP_LABELS = ["① 노트", "② 개념", "③ 퀴즈 생성", "④ 풀기", "⑤ 결과"]
+
+_DEFAULTS = {
+    "step": 0,
+    "note_text": "",
+    "note_id": None,
+    "concepts": [],
+    "selected_concepts": [],
+    "quiz_queue": [],
+    "quiz_pos": 0,
+    "answered": False,
+    "last_correct": None,
+    "session_results": [],
+    "review_mode": False,
+    "session_saved": False,
 }
 
-OLLAMA_MODELS = {
-    "qwen2.5:7b":      "🌏 Qwen 2.5 (다국어·추론 강함, 7B)",
-    "exaone3.5:2.4b":  "🇰🇷 EXAONE 3.5 (한국어 특화, 2.4B)",
-    "gemma2:9b":       "💎 Gemma 2 (Google, 균형형, 9B)",
-    "llama3.2:3b":     "🦙 Llama 3.2 (Meta, 경량 빠름, 3B)",
-}
+
+def _init_state() -> None:
+    for key, value in _DEFAULTS.items():
+        st.session_state.setdefault(key, value)
 
 
-# ── 페이지 설정 ─────────────────────────────────────────────────────────────
-
-st.set_page_config(page_title="StudyBot v2", page_icon="📚", layout="wide")
-st.title("📚 StudyBot v2")
-st.caption("자유롭게 질문하면 선택한 LLM이 동시에 답변합니다.")
-
-# ── 사이드바 ─────────────────────────────────────────────────────────────────
-
-with st.sidebar:
-    st.header("⚙️ 설정")
-
-    # 학습 모드
-    st.subheader("학습 모드")
-    mode = st.radio("모드 선택", list(MODES.keys()), format_func=lambda k: MODES[k])
-
-    st.divider()
-
-    # LLM 선택
-    st.subheader("LLM 선택")
-
-    use_ollama = st.checkbox("Ollama (로컬)", value=True)
-    ollama_cfg = {}
-    if use_ollama:
-        ollama_cfg["base_url"] = st.text_input("Ollama URL", value="http://localhost:11434")
-        ollama_cfg["model"] = st.selectbox(
-            "Ollama 모델",
-            list(OLLAMA_MODELS.keys()),
-            format_func=lambda k: OLLAMA_MODELS[k],
+def _render_sidebar() -> None:
+    with st.sidebar:
+        st.markdown("### 🔑 Gemini API Key")
+        st.markdown(
+            '<a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio에서 발급받기</a>',
+            unsafe_allow_html=True,
         )
-
-    st.divider()
-
-    use_groq = st.checkbox("Groq · Llama 3.3 70b")
-    groq_key = ""
-    if use_groq:
-        st.markdown('<a href="https://console.groq.com/keys" target="_blank">🔑 Groq API 키 발급받기</a>', unsafe_allow_html=True)
-        groq_key = st.text_input("Groq API Key", type="password", placeholder="gsk_...")
-
-    st.divider()
-
-    use_gemini = st.checkbox("Gemini 2.5 Flash")
-    gemini_key = ""
-    if use_gemini:
-        st.markdown('<a href="https://aistudio.google.com/app/apikey" target="_blank">🔑 Google AI Studio에서 발급받기</a>', unsafe_allow_html=True)
-        _env_gemini = os.getenv("GEMINI_API_KEY", "")
-        gemini_key = st.text_input(
+        env_key = os.getenv("GEMINI_API_KEY", "")
+        api_key = st.text_input(
             "Gemini API Key",
-            value=_env_gemini if _env_gemini.startswith("AIza") else "",
+            value=env_key if env_key.startswith("AIza") else "",
             type="password",
             placeholder="AIza...",
         )
+        st.session_state["api_key"] = api_key.strip()
+        st.caption("키는 세션 안에서만 사용되며 저장되지 않습니다.")
 
-# ── 메인 ─────────────────────────────────────────────────────────────────────
 
-question = st.text_area(
-    "질문을 자유롭게 입력하세요",
-    placeholder="예: 재귀함수가 뭐야? / 편미분 개념 설명해줘 / 트랜스포머 attention 원리",
-    height=120,
-)
-
-# 활성 LLM 목록 구성
-targets = []
-if use_ollama:
-    targets.append({"provider": "ollama", "model": ollama_cfg.get("model", "qwen2.5:7b"), "base_url": ollama_cfg.get("base_url", "http://localhost:11434")})
-if use_groq and groq_key:
-    targets.append({"provider": "groq", "api_key": groq_key})
-if use_gemini and gemini_key:
-    targets.append({"provider": "gemini", "api_key": gemini_key})
-
-# 버튼 비활성 조건
-no_llm = len(targets) == 0
-no_question = not question.strip()
-run = st.button(
-    "▶ 질문하기",
-    disabled=no_llm or no_question,
-    type="primary",
-    help="LLM을 하나 이상 선택하고 질문을 입력하세요." if (no_llm or no_question) else None,
-)
-
-if no_llm:
-    st.info("사이드바에서 LLM을 하나 이상 선택하세요.")
-
-# ── 실행 ─────────────────────────────────────────────────────────────────────
-
-if run and targets and question.strip():
-    prompt = build_prompt(mode, question.strip())
-    _keys = [f"ollama:{t.get('model','qwen2.5:7b')}" if t["provider"] == "ollama" else t["provider"] for t in targets]
-    cache_key = f"{mode}__{question.strip()}__{'|'.join(_keys)}"
-
-    if cache_key not in st.session_state:
-        # 상태 표시
-        status_cols = st.columns(len(targets))
-        placeholders = [col.empty() for col in status_cols]
-        for i, t in enumerate(targets):
-            label = f"Ollama · {t.get('model','')}" if t["provider"] == "ollama" else \
-                    "Groq · Llama 3.3 70b" if t["provider"] == "groq" else "Gemini · 2.5 Flash"
-            placeholders[i].info(f"⏳ {label} 응답 중...")
-
-        with st.spinner(f"{len(targets)}개 LLM 동시 응답 중..."):
-            results = ask_all(targets, prompt)
-
-        st.session_state[cache_key] = results
-
-        for i, r in enumerate(results):
-            if r["error"]:
-                placeholders[i].error(f"❌ {r['model']}\n{r['error']}")
-            else:
-                placeholders[i].success(f"✅ {r['model']} · {r['elapsed']}s")
-
-    results = st.session_state[cache_key]
-
+def _render_progress(step: int) -> None:
+    """현재 단계를 굵게 표시한 진행바: ① 노트 → ② 개념 → ③ 퀴즈 생성 → ④ 풀기 → ⑤ 결과"""
+    parts = []
+    for i, label in enumerate(STEP_LABELS, start=1):
+        parts.append(f"**:blue[{label}]**" if i == step else f":gray[{label}]")
+    st.markdown(" → ".join(parts))
     st.divider()
-    st.subheader(f"{MODES[mode]} 결과 — {len(results)}개 LLM 비교")
 
-    cols = st.columns(len(results))
-    for col, r in zip(cols, results):
-        with col:
-            st.markdown(f"#### {r['model']}")
-            if r["error"]:
-                st.error(f"오류: {r['error']}")
-            else:
-                st.caption(f"응답 시간: **{r['elapsed']}s**")
-                st.markdown(r["response"])
+
+def main() -> None:
+    _init_state()
+    _render_sidebar()
+
+    step = st.session_state["step"]
+    if step >= 1:
+        _render_progress(step)
+
+    if step == 0:
+        dashboard.render()
+    elif step == 1:
+        note_input.render()
+    elif step == 2:
+        concepts.render()
+    elif step in (3, 4):
+        quiz.render()
+    elif step == 5:
+        result.render()
+
+
+main()
